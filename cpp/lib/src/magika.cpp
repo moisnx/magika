@@ -19,33 +19,6 @@ struct ContentTypeInfo {
 
 std::unordered_map<std::string, ContentTypeInfo> content_types_kb_;
 
-// Add method to load it
-void load_content_types_kb(const std::string &kb_path) {
-  std::ifstream file(kb_path);
-  if (!file) {
-    throw std::runtime_error("Cannot open content types KB: " + kb_path);
-  }
-
-  nlohmann::json j;
-  file >> j;
-
-  for (auto &[label, info] : j.items()) {
-    ContentTypeInfo ct_info;
-    ct_info.label = label;
-    ct_info.mime_type = info["mime_type"].is_null()
-                            ? "application/octet-stream"
-                            : info["mime_type"].get<std::string>();
-    ct_info.group =
-        info["group"].is_null() ? "unknown" : info["group"].get<std::string>();
-    ct_info.description = info["description"].is_null()
-                              ? label
-                              : info["description"].get<std::string>();
-    ct_info.is_text = info["is_text"];
-
-    content_types_kb_[label] = ct_info;
-  }
-}
-
 struct ModelConfig {
   int beg_size;
   int mid_size;
@@ -76,12 +49,43 @@ private:
   std::string model_name_;
   ModelConfig config_;
 
+  // MOVE THIS HERE - per instance, not global!
+  std::unordered_map<std::string, ContentTypeInfo> content_types_kb_;
+
   Ort::Env env_;
   std::unique_ptr<Ort::Session> session_;
 
+  void
+  load_content_types_kb(const std::string &kb_path); // Now a member function
   std::vector<int32_t> extract_features(const std::vector<uint8_t> &data);
   std::vector<float> run_inference(const std::vector<int32_t> &features);
 };
+
+void Magika::Impl::load_content_types_kb(const std::string &kb_path) {
+  std::ifstream file(kb_path);
+  if (!file) {
+    throw std::runtime_error("Cannot open content types KB: " + kb_path);
+  }
+
+  nlohmann::json j;
+  file >> j;
+
+  for (auto &[label, info] : j.items()) {
+    ContentTypeInfo ct_info;
+    ct_info.label = label;
+    ct_info.mime_type = info["mime_type"].is_null()
+                            ? "application/octet-stream"
+                            : info["mime_type"].get<std::string>();
+    ct_info.group =
+        info["group"].is_null() ? "unknown" : info["group"].get<std::string>();
+    ct_info.description = info["description"].is_null()
+                              ? label
+                              : info["description"].get<std::string>();
+    ct_info.is_text = info["is_text"];
+
+    content_types_kb_[label] = ct_info;
+  }
+}
 
 // Load config implementation
 ModelConfig ModelConfig::load(const std::string &config_path) {
@@ -107,10 +111,8 @@ ModelConfig ModelConfig::load(const std::string &config_path) {
 }
 
 // Impl constructor
-// Impl constructor
 Magika::Impl::Impl(const std::string &model_dir)
-    : model_dir_(model_dir), // Don't provide default!
-      env_(ORT_LOGGING_LEVEL_WARNING, "magika") {
+    : model_dir_(model_dir), env_(ORT_LOGGING_LEVEL_WARNING, "magika") {
 
   if (model_dir_.empty()) {
     throw std::runtime_error(
@@ -122,19 +124,17 @@ Magika::Impl::Impl(const std::string &model_dir)
   std::string config_path = model_dir_ + "/config.min.json";
   config_ = ModelConfig::load(config_path);
 
-  // Load mimetypes - use parent directory of model_dir
-  // If model_dir is "/path/to/models/standard_v3_3"
-  // Then kb is at "/path/to/content_types_kb.min.json"
+  // Load mimetypes (now using member function)
   std::filesystem::path model_path(model_dir_);
   std::filesystem::path kb_path =
-      model_path.parent_path().parent_path() / "content_types_kb.min.json";
+      model_path.parent_path() / "content_types_kb.min.json";
 
-  // Fallback: try same directory as model
   if (!std::filesystem::exists(kb_path)) {
-    kb_path = model_path.parent_path() / "content_types_kb.min.json";
+    throw std::runtime_error("Content types KB not found at: " +
+                             kb_path.string());
   }
 
-  load_content_types_kb(kb_path.string());
+  load_content_types_kb(kb_path.string()); // Loads into content_types_kb_
 
   // Load ONNX model
   std::string model_onnx_path = model_dir_ + "/model.onnx";
@@ -142,7 +142,7 @@ Magika::Impl::Impl(const std::string &model_dir)
   session_ = std::make_unique<Ort::Session>(env_, model_onnx_path.c_str(),
                                             session_options);
 
-  // Extract model name from directory
+  // Extract model name
   size_t last_slash = model_dir_.find_last_of("/\\");
   model_name_ = (last_slash != std::string::npos)
                     ? model_dir_.substr(last_slash + 1)
@@ -229,6 +229,30 @@ Magika::Impl::run_inference(const std::vector<int32_t> &features) {
 }
 
 MagikaResult Magika::Impl::identify_bytes(const std::vector<uint8_t> &content) {
+  MagikaResult result;
+  result.path = "-";
+
+  // Handle empty files
+  if (content.empty()) {
+    result.content_type = "empty";
+    result.mime_type = "inode/x-empty";
+    result.group = "inode";
+    result.score = 1.0;
+    // result.is_text = true;
+    return result;
+  }
+
+  // Handle very small files (below DL threshold)
+  if (content.size() < config_.min_file_size_for_dl) {
+    result.content_type = "generic_text"; // or "unknown" depending on your KB
+    result.mime_type = "text/plain";
+    result.group = "text";
+    result.score = 0.5; // Low confidence
+    // result.is_text = true;
+    return result;
+  }
+
+  // Normal ML-based detection
   auto features = extract_features(content);
   auto predictions = run_inference(features);
 
@@ -236,33 +260,56 @@ MagikaResult Magika::Impl::identify_bytes(const std::vector<uint8_t> &content) {
   int predicted_class = std::distance(predictions.begin(), max_it);
   float confidence = *max_it;
 
-  MagikaResult result;
-  result.path = "-";
   result.content_type = config_.target_labels_space[predicted_class];
   result.score = confidence;
 
-  // Add MIME type and group
+  // Add MIME type, group, and is_text
   if (content_types_kb_.count(result.content_type)) {
     auto &info = content_types_kb_[result.content_type];
     result.mime_type = info.mime_type;
     result.group = info.group;
+    // result.is_text = info.is_text;
   } else {
     result.mime_type = "application/octet-stream";
     result.group = "unknown";
+    // result.is_text = false;
   }
+
   return result;
 }
 
 MagikaResult Magika::Impl::identify_path(const std::string &filepath) {
-  // Read file
   std::ifstream file(filepath, std::ios::binary);
   if (!file) {
     throw std::runtime_error("Cannot open file: " + filepath);
   }
 
-  // FIX: Add extra parentheses or use brace initialization
-  std::vector<uint8_t> content{std::istreambuf_iterator<char>(file),
-                               std::istreambuf_iterator<char>()};
+  // Get file size
+  file.seekg(0, std::ios::end);
+  std::streamsize file_size = file.tellg();
+  file.seekg(0, std::ios::beg);
+
+  std::vector<uint8_t> content;
+
+  // Handle empty files early
+  if (file_size == 0) {
+    content.clear(); // Empty vector
+  } else if (file_size <= config_.block_size * 2) {
+    // Small file - read all
+    content.resize(file_size);
+    file.read(reinterpret_cast<char *>(content.data()), file_size);
+  } else {
+    // Large file - read beginning (block_size) and end (block_size)
+    content.resize(config_.block_size * 2);
+
+    // Read beginning
+    file.read(reinterpret_cast<char *>(content.data()), config_.block_size);
+
+    // Jump to end and read last block_size bytes
+    file.seekg(-static_cast<std::streamoff>(config_.block_size), std::ios::end);
+    file.read(reinterpret_cast<char *>(content.data() + config_.block_size),
+              config_.block_size);
+  }
 
   auto result = identify_bytes(content);
   result.path = filepath;
