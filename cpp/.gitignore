@@ -1,0 +1,95 @@
+# Prerequisites
+*.d
+
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+*.bin
+*.elf
+
+# Other files to ignore
+*.lock
+*.manifest
+*.pdb
+*.ilk
+*.meta
+*.pro.user*
+
+# CMake
+# CMake generate build system
+CMakeLists.txt.user
+CMakeCache.txt
+CMakeFiles
+CMakeScripts
+Testing
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+
+# Build directories
+build/
+bin/
+obj/
+*.opendb
+
+# Documentation
+doc/html/
+doc/man/
+
+# kcov coverage reports
+*.kcov
+
+# Cache dir
+.cache/*
+
+# Environment-specific files (e.g., Visual Studio, macOS)
+.vscode/
+.idea/
+.vs/
+ipch/
+*.aps
+*.ncb
+*.sdf
+*.opensdf
+*.cachefile
+*.VC.db
+*.VC.opendb
+*.suo
+*.user
+*.config.un~
+*.xcodeproj/
+*.xcworkspace/
+*.xcuserdatad/
+
+# OS-specific files
+.DS_Store # macOS
+ehthumbs.db # Windows
+[Tt]humbs.db # Windows
+
+# Temporary files
+*~
+*.tmp
+*.bak
+*.swp # vim swap files
