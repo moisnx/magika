@@ -1,0 +1,10 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+
+# Users need ONNX Runtime too
+# find_dependency(onnxruntime REQUIRED)
+
+include("${CMAKE_CURRENT_LIST_DIR}/magikaTargets.cmake")
+
+check_required_components(magika)

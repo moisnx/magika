@@ -3,6 +3,7 @@
 #include <iomanip>
 #include <iostream>
 #include <magika/magika.hpp>
+#include <numeric>
 #include <vector>
 
 namespace fs = std::filesystem;
@@ -19,6 +20,39 @@ struct Options {
   std::vector<std::string> paths;
 };
 
+std::string find_magika_models() {
+  // Try environment variable first
+  if (const char *env_path = std::getenv("MAGIKA_MODEL_PATH")) {
+    if (fs::exists(env_path)) {
+      return env_path;
+    }
+  }
+
+  // Try common install locations
+  std::vector<std::string> search_paths = {
+      "/usr/local/share/magika/models/standard_v3_3",
+      "/usr/share/magika/models/standard_v3_3",
+      "../../assets/models/standard_v3_3", // Development build
+      "./models/standard_v3_3",            // Bundled
+      "../models/standard_v3_3"            // Build directory
+  };
+
+  for (const auto &path : search_paths) {
+    if (fs::exists(path + "/model.onnx")) {
+      return path;
+    }
+  }
+
+  throw std::runtime_error(
+      "Magika models not found. Tried:\n" +
+      std::accumulate(search_paths.begin(), search_paths.end(), std::string(),
+                      [](const std::string &a, const std::string &b) {
+                        return a + "  - " + b + "\n";
+                      }) +
+      "\nInstall with: sudo cmake --install build\n"
+      "Or set MAGIKA_MODEL_PATH=/path/to/models/standard_v3_3");
+}
+
 void print_usage(const char *prog_name) {
   std::cout << "Determines file content types using AI\n\n"
             << "Usage: " << prog_name << " [OPTIONS] [PATH]...\n\n"
@@ -26,6 +60,8 @@ void print_usage(const char *prog_name) {
             << "  [PATH]...  List of paths to the files to analyze\n\n"
             << "Options:\n"
             << "  -r, --recursive        Identifies files within directories\n"
+            << "      --model-dir PATH   Path to model directory\n"
+            << "      --no-dereference   Identifies symbolic links as is\n"
             << "      --no-dereference   Identifies symbolic links as is\n"
             << "  -s, --output-score     Prints the prediction score\n"
             << "  -i, --mime-type        Prints the MIME type\n"
@@ -211,8 +247,7 @@ int main(int argc, char *argv[]) {
   Options opts = parse_args(argc, argv);
 
   if (opts.paths.empty()) {
-    std::cerr << termcolor::red << "Error: No files specified\n"
-              << termcolor::reset;
+    std::cerr << "Error: No files specified\n";
     print_usage(argv[0]);
     return 1;
   }
@@ -225,13 +260,13 @@ int main(int argc, char *argv[]) {
     }
 
     if (files.empty()) {
-      std::cerr << termcolor::red << "No files to process\n"
-                << termcolor::reset;
+      std::cerr << "No files to process\n";
       return 1;
     }
 
-    // Initialize Magika
-    magika::Magika detector;
+    // Initialize Magika with auto-detected path
+    std::string model_path = find_magika_models();
+    magika::Magika detector(model_path);
 
     // Process files
     for (const auto &filepath : files) {
@@ -250,14 +285,13 @@ int main(int argc, char *argv[]) {
           print_result_default(result, opts.show_score, opts.colors);
         }
       } catch (const std::exception &e) {
-        std::cerr << termcolor::red << "Error processing " << filepath << ": "
-                  << e.what() << termcolor::reset << std::endl;
+        std::cerr << "Error processing " << filepath << ": " << e.what()
+                  << std::endl;
       }
     }
 
   } catch (const std::exception &e) {
-    std::cerr << termcolor::red << "Error: " << e.what() << termcolor::reset
-              << std::endl;
+    std::cerr << "Error: " << e.what() << std::endl;
     return 1;
   }
 

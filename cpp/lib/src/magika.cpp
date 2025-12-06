@@ -107,27 +107,40 @@ ModelConfig ModelConfig::load(const std::string &config_path) {
 }
 
 // Impl constructor
-// In Magika::Impl constructor
+// Impl constructor
 Magika::Impl::Impl(const std::string &model_dir)
-    : model_dir_(model_dir.empty() ? "../../assets/models/standard_v3_3"
-                                   : model_dir),
+    : model_dir_(model_dir), // Don't provide default!
       env_(ORT_LOGGING_LEVEL_WARNING, "magika") {
+
+  if (model_dir_.empty()) {
+    throw std::runtime_error(
+        "Model directory must be provided. "
+        "Example: Magika(\"/usr/local/share/magika/models/standard_v3_3\")");
+  }
 
   // Load config
   std::string config_path = model_dir_ + "/config.min.json";
   config_ = ModelConfig::load(config_path);
 
-  // Load mimetypes
-  std::string kb_path = "../../assets/content_types_kb.min.json";
-  load_content_types_kb(kb_path);
+  // Load mimetypes - use parent directory of model_dir
+  // If model_dir is "/path/to/models/standard_v3_3"
+  // Then kb is at "/path/to/content_types_kb.min.json"
+  std::filesystem::path model_path(model_dir_);
+  std::filesystem::path kb_path =
+      model_path.parent_path().parent_path() / "content_types_kb.min.json";
+
+  // Fallback: try same directory as model
+  if (!std::filesystem::exists(kb_path)) {
+    kb_path = model_path.parent_path() / "content_types_kb.min.json";
+  }
+
+  load_content_types_kb(kb_path.string());
 
   // Load ONNX model
-  std::string model_path = model_dir_ + "/model.onnx";
-  // std::cerr << "DEBUG: Loading model from: " << model_path << std::endl;
+  std::string model_onnx_path = model_dir_ + "/model.onnx";
   Ort::SessionOptions session_options;
-  session_ =
-      std::make_unique<Ort::Session>(env_, model_path.c_str(), session_options);
-  // std::cerr << "DEBUG: Model loaded successfully" << std::endl;
+  session_ = std::make_unique<Ort::Session>(env_, model_onnx_path.c_str(),
+                                            session_options);
 
   // Extract model name from directory
   size_t last_slash = model_dir_.find_last_of("/\\");

@@ -11,11 +11,11 @@ option(BUILD_EXAMPLES "Build example programs" ON)
 option(BUILD_TESTS "Build tests" OFF)
 
 # ONNX Runtime configuration
-set(ONNXRUNTIME_DIR "$ENV{HOME}/onnxruntime-linux-x64-1.23.2" 
+set(ONNXRUNTIME_DIR "$ENV{HOME}/onnxruntime-linux-x64-1.23.2"
     CACHE PATH "Path to ONNX Runtime installation")
 
 if(NOT EXISTS ${ONNXRUNTIME_DIR})
-    message(FATAL_ERROR 
+    message(FATAL_ERROR
         "ONNX Runtime not found at ${ONNXRUNTIME_DIR}. "
         "Please set ONNXRUNTIME_DIR to the correct path.")
 endif()
@@ -57,6 +57,11 @@ install(DIRECTORY ${CMAKE_SOURCE_DIR}/../assets/models/standard_v3_3
     DESTINATION ${CMAKE_INSTALL_DATADIR}/magika/models
 )
 
+# Install the content types KB (add this!)
+install(FILES ${CMAKE_SOURCE_DIR}/../assets/content_types_kb.min.json
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/magika/models
+)
+
 # Export targets for find_package
 install(EXPORT magikaTargets
     FILE magikaTargets.cmake
@@ -65,13 +70,13 @@ install(EXPORT magikaTargets
 )
 
 # Create package config file
-# include(CMakePackageConfigHelpers)
-# configure_package_config_file(
-#     ${CMAKE_CURRENT_SOURCE_DIR}/cmake/magikaConfig.cmake.in
-#     ${CMAKE_CURRENT_BINARY_DIR}/magikaConfig.cmake
-#     INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/magika
-# )
+include(CMakePackageConfigHelpers)
+configure_package_config_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/cmake/magikaConfig.cmake.in
+    ${CMAKE_CURRENT_BINARY_DIR}/magikaConfig.cmake
+    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/magika
+)
 
-# install(FILES ${CMAKE_CURRENT_BINARY_DIR}/magikaConfig.cmake
-#     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/magika
-# )
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/magikaConfig.cmake
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/magika
+)
