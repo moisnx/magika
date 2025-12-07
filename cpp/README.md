@@ -4,14 +4,14 @@ C++ implementation of Magika using ONNX Runtime for fast, accurate file type det
 
 ## Features
 
-- 🚀 Fast inference (~5ms per file)
-- 🎯 High accuracy using deep learning (214 file types supported)
-- 📦 Clean C++ API with PIMPL pattern
-- 🔧 Easy integration into C++ projects
-- 💻 Full-featured command-line tool
-- 🎨 Colorized output support
-- 📁 Recursive directory scanning
-- 🔍 Multiple output formats (JSON, JSONL, labels, MIME types)
+- Fast inference (~5ms per file)
+- High accuracy using deep learning (214 file types supported)
+- Clean C++ API with PIMPL pattern
+- Easy integration into C++ projects
+- Full-featured command-line tool
+- Colorized output support
+- Recursive directory scanning
+- Multiple output formats (JSON, JSONL, labels, MIME types)
 
 ## Building
 
